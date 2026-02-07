@@ -18,7 +18,7 @@ pub async fn process(mut socket: TcpStream, db: Db) -> Result<()> {
 
         match Command::from_str(&line) {
             Ok(Command::Get(key)) => {
-                let db = db.lock().await;
+                let db = db.read().await;
                 if let Some(value) = db.get(&key) {
                     writer.write_all(value.as_bytes()).await?;
                     writer.write_all(b"\n").await?;
@@ -27,7 +27,7 @@ pub async fn process(mut socket: TcpStream, db: Db) -> Result<()> {
                 }
             }
             Ok(Command::Set(key, value)) => {
-                let mut db = db.lock().await;
+                let mut db = db.write().await;
                 db.insert(key, value);
                 writer.write_all(b"OK\n").await?;
             }
