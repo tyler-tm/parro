@@ -1,25 +1,33 @@
 use crate::error::ClientError;
 
 #[derive(Debug)]
-pub enum Command {
-    Get(String),
-    Set(String, String),
+pub enum Command<'a> {
+    Get(&'a str),
+    Set(&'a str, &'a str),
 }
 
-impl Command {
-    pub fn from_str(s: &str) -> Result<Command, ClientError> {
-        let parts: Vec<&str> = s.trim().split(' ').collect();
-        match parts.get(0).map(|s| *s) {
+impl<'a> Command<'a> {
+    pub fn from_str(s: &'a str) -> Result<Command<'a>, ClientError> {
+        let mut parts = s.trim().split_whitespace();
+        match parts.next() {
             Some("GET") => {
-                if parts.len() == 2 {
-                    Ok(Command::Get(parts[1].to_string()))
+                if let Some(key) = parts.next() {
+                    if parts.next().is_none() {
+                        Ok(Command::Get(key))
+                    } else {
+                        Err(ClientError::WrongNumberOfArguments)
+                    }
                 } else {
                     Err(ClientError::WrongNumberOfArguments)
                 }
             }
             Some("SET") => {
-                if parts.len() == 3 {
-                    Ok(Command::Set(parts[1].to_string(), parts[2].to_string()))
+                if let (Some(key), Some(value)) = (parts.next(), parts.next()) {
+                    if parts.next().is_none() {
+                        Ok(Command::Set(key, value))
+                    } else {
+                        Err(ClientError::WrongNumberOfArguments)
+                    }
                 } else {
                     Err(ClientError::WrongNumberOfArguments)
                 }

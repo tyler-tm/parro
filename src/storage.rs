@@ -24,10 +24,10 @@ impl Store {
         self.map.get(key).map(|s| s.as_str())
     }
 
-    pub fn set(&mut self, key: String, value: String) -> Result<(), StorageError> {
+    pub fn set(&mut self, key: &str, value: &str) -> Result<(), StorageError> {
         let new_value_size = value.len();
 
-        if let Some(old_value) = self.map.get(&key) {
+        if let Some(old_value) = self.map.get(key) {
             let new_size_bytes = self.current_size_bytes - old_value.len() + new_value_size;
 
             if new_size_bytes > self.max_size_bytes {
@@ -52,7 +52,7 @@ impl Store {
             self.current_size_bytes += new_key_value_size;
         }
 
-        self.map.insert(key, value);
+        self.map.insert(key.to_string(), value.to_string());
         Ok(())
     }
 }
