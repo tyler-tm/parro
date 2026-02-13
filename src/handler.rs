@@ -1,12 +1,13 @@
 use crate::command::Command;
 use crate::error::Result;
 use crate::storage::Db;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::net::TcpStream;
 
 pub async fn process(mut socket: TcpStream, db: Db) -> Result<()> {
-    let (reader, mut writer) = socket.split();
+    let (reader, writer) = socket.split();
     let mut reader = BufReader::new(reader);
+    let mut writer = BufWriter::new(writer);
     let mut line = String::new();
 
     loop {
@@ -19,7 +20,7 @@ pub async fn process(mut socket: TcpStream, db: Db) -> Result<()> {
         match Command::from_str(&line) {
             Ok(Command::Get(key)) => {
                 let db = db.read().await;
-                if let Some(value) = db.get(&key) {
+                if let Some(value) = db.get(key) {
                     writer.write_all(value.as_bytes()).await?;
                     writer.write_all(b"\n").await?;
                 } else {
@@ -43,6 +44,7 @@ pub async fn process(mut socket: TcpStream, db: Db) -> Result<()> {
                 writer.write_all(msg.as_bytes()).await?;
             }
         }
+        writer.flush().await?;
     }
     Ok(())
 }
