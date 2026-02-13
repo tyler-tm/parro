@@ -7,15 +7,11 @@ mod storage;
 use server::Server;
 
 #[tokio::main]
-async fn main() {
-    if let Err(e) = run().await {
-        eprintln!("Error: {}", e);
-        std::process::exit(1);
-    }
-}
 
-async fn run() -> error::Result<()> {
-    let server = Server::new().await?;
-    server.run().await?;
-    Ok(())
+async fn main() -> error::Result<()> {
+    let server = Server::new()
+        .await
+        .map_err(|e| -> error::Error { format!("Error while starting server: {}", e).into() })?;
+
+    server.run().await
 }
