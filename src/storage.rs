@@ -20,8 +20,8 @@ impl Store {
         }
     }
 
-    pub fn get(&self, key: &str) -> Option<String> {
-        self.map.get(key).cloned()
+    pub fn get(&self, key: &str) -> Option<&str> {
+        self.map.get(key).map(|s| s.as_str())
     }
 
     pub fn set(&mut self, key: String, value: String) -> Result<(), StorageError> {
