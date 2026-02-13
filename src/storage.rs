@@ -25,34 +25,40 @@ impl Store {
     }
 
     pub fn set(&mut self, key: &str, value: &str) -> Result<(), StorageError> {
+        use std::collections::hash_map::Entry;
+
         let new_value_size = value.len();
 
-        if let Some(old_value) = self.map.get(key) {
-            let new_size_bytes = self.current_size_bytes - old_value.len() + new_value_size;
+        match self.map.entry(key.to_string()) {
+            Entry::Occupied(mut entry) => {
+                let old_value_size = entry.get().len();
+                let new_size_bytes = self.current_size_bytes - old_value_size + new_value_size;
 
-            if new_size_bytes > self.max_size_bytes {
-                println!(
-                    "Storage limit exceeded. Max size: {} bytes, attempted to increase existing entry size by {} bytes",
-                    self.max_size_bytes,
-                    new_value_size - old_value.len()
-                );
-                return Err(StorageError::LimitExceeded);
+                if new_size_bytes > self.max_size_bytes {
+                    println!(
+                        "Storage limit exceeded. Max size: {} bytes, attempted to increase existing entry size by {} bytes",
+                        self.max_size_bytes,
+                        new_value_size - old_value_size
+                    );
+                    return Err(StorageError::LimitExceeded);
+                }
+                self.current_size_bytes = new_size_bytes;
+                entry.insert(value.to_string());
             }
-            self.current_size_bytes = new_size_bytes;
-        } else {
-            let new_key_value_size = key.len() + new_value_size;
-            if self.current_size_bytes + new_key_value_size > self.max_size_bytes {
-                println!(
-                    "Storage limit exceeded. Max size: {} MB, attempted to add new size of {} bytes",
-                    bytes_to_mb(self.max_size_bytes),
-                    new_key_value_size
-                );
-                return Err(StorageError::LimitExceeded);
+            Entry::Vacant(entry) => {
+                let new_key_value_size = entry.key().len() + new_value_size;
+                if self.current_size_bytes + new_key_value_size > self.max_size_bytes {
+                    println!(
+                        "Storage limit exceeded. Max size: {} MB, attempted to add new size of {} bytes",
+                        bytes_to_mb(self.max_size_bytes),
+                        new_key_value_size
+                    );
+                    return Err(StorageError::LimitExceeded);
+                }
+                self.current_size_bytes += new_key_value_size;
+                entry.insert(value.to_string());
             }
-            self.current_size_bytes += new_key_value_size;
         }
-
-        self.map.insert(key.to_string(), value.to_string());
         Ok(())
     }
 }
