@@ -1,11 +1,5 @@
-mod command;
-mod error;
-mod handler;
-mod server;
-mod static_utils;
-mod storage;
-
-use server::Server;
+use parro::error;
+use parro::server::Server;
 
 #[tokio::main]
 

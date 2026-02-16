@@ -1,6 +1,6 @@
 use crate::error::ClientError;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Command<'a> {
     Get(&'a str),
     Set(&'a str, &'a str),
