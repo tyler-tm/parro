@@ -19,7 +19,7 @@ async fn setup_test() -> (TcpStream, Db, String) {
 }
 
 #[tokio::test]
-async fn test_process_get_found() {
+async fn process_get_found() {
     let (mut stream, db, _) = setup_test().await;
     db.write().await.set("key", "value").unwrap();
 
@@ -33,7 +33,7 @@ async fn test_process_get_found() {
 }
 
 #[tokio::test]
-async fn test_process_get_not_found() {
+async fn process_get_not_found() {
     let (mut stream, _, _) = setup_test().await;
 
     stream.write_all(b"GET key\n").await.unwrap();
@@ -46,7 +46,7 @@ async fn test_process_get_not_found() {
 }
 
 #[tokio::test]
-async fn test_process_set_success() {
+async fn process_set_success() {
     let (mut stream, db, _) = setup_test().await;
 
     stream.write_all(b"SET key value\n").await.unwrap();
@@ -61,7 +61,7 @@ async fn test_process_set_success() {
 }
 
 #[tokio::test]
-async fn test_process_invalid_command() {
+async fn process_invalid_command() {
     let (mut stream, _, _) = setup_test().await;
 
     stream.write_all(b"INVALID command\n").await.unwrap();
