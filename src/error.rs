@@ -10,9 +10,9 @@ pub enum ClientError {
 impl fmt::Display for ClientError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ClientError::UnknownCommand => write!(f, "Error: unknown command"),
+            ClientError::UnknownCommand => write!(f, "unknown command"),
             ClientError::WrongNumberOfArguments => {
-                write!(f, "Error: wrong number of arguments for command")
+                write!(f, "wrong number of arguments for command")
             }
         }
     }

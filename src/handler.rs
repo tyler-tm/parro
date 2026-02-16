@@ -40,7 +40,7 @@ pub async fn process(mut socket: TcpStream, db: Db) -> Result<()> {
                 }
             }
             Err(e) => {
-                let msg = format!("{}\n", e);
+                let msg = format!("Error: {}\n", e);
                 writer.write_all(msg.as_bytes()).await?;
             }
         }
