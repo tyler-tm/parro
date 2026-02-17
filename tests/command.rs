@@ -72,3 +72,27 @@ fn case_sensitive_command() {
     let result = Command::from_str("get key");
     assert_eq!(result, Err(ClientError::UnknownCommand));
 }
+
+#[test]
+fn parse_delete_success() {
+    let result = Command::from_str("DELETE key").unwrap();
+    assert_eq!(result, Command::Delete("key"));
+}
+
+#[test]
+fn parse_delete_no_key() {
+    let result = Command::from_str("DELETE");
+    assert_eq!(result, Err(ClientError::WrongNumberOfArguments));
+}
+
+#[test]
+fn parse_delete_too_many_args() {
+    let result = Command::from_str("DELETE key value");
+    assert_eq!(result, Err(ClientError::WrongNumberOfArguments));
+}
+
+#[test]
+fn parse_delete_with_multiple_spaces() {
+    let result = Command::from_str("DELETE   key").unwrap();
+    assert_eq!(result, Command::Delete("key"));
+}

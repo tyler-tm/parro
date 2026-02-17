@@ -63,3 +63,21 @@ fn store_set_empty_key() {
     store.set(key, value).unwrap();
     assert_eq!(store.get(key), Some(value));
 }
+
+#[test]
+fn store_delete() {
+    let mut store = Store::new(1024);
+    let key = "to_delete";
+    let value = "some_value";
+    store.set(key, value).unwrap();
+    assert_eq!(store.get(key), Some(value));
+    store.delete(key).unwrap();
+    assert_eq!(store.get(key), None);
+}
+
+#[test]
+fn store_delete_non_existing() {
+    let mut store = Store::new(1024);
+    let result = store.delete("non_existing");
+    assert_eq!(result, Err(StorageError::NotFound));
+}

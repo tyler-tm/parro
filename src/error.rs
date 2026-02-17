@@ -23,12 +23,14 @@ impl error::Error for ClientError {}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StorageError {
     LimitExceeded,
+    NotFound,
 }
 
 impl fmt::Display for StorageError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             StorageError::LimitExceeded => write!(f, "storage limit exceeded"),
+            StorageError::NotFound => write!(f, "key not found"),
         }
     }
 }

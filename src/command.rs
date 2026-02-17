@@ -4,6 +4,7 @@ use crate::error::ClientError;
 pub enum Command<'a> {
     Get(&'a str),
     Set(&'a str, &'a str),
+    Delete(&'a str),
 }
 
 impl<'a> Command<'a> {
@@ -25,6 +26,17 @@ impl<'a> Command<'a> {
                 if let (Some(key), Some(value)) = (parts.next(), parts.next()) {
                     if parts.next().is_none() {
                         Ok(Command::Set(key, value))
+                    } else {
+                        Err(ClientError::WrongNumberOfArguments)
+                    }
+                } else {
+                    Err(ClientError::WrongNumberOfArguments)
+                }
+            }
+            Some("DELETE") => {
+                if let Some(key) = parts.next() {
+                    if parts.next().is_none() {
+                        Ok(Command::Delete(key))
                     } else {
                         Err(ClientError::WrongNumberOfArguments)
                     }

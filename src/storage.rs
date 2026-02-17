@@ -61,6 +61,15 @@ impl Store {
         }
         Ok(())
     }
+
+    pub fn delete(&mut self, key: &str) -> Result<(), StorageError> {
+        if let Some(value) = self.map.remove(key) {
+            self.current_size_bytes -= key.len() + value.len();
+            Ok(())
+        } else {
+            Err(StorageError::NotFound)
+        }
+    }
 }
 
 pub type Db = Arc<RwLock<Store>>;
