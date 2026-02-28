@@ -8,7 +8,7 @@ pub enum Command<'a> {
 }
 
 impl<'a> Command<'a> {
-    pub fn from_str(s: &'a str) -> Result<Command<'a>, ClientError> {
+    pub fn parse(s: &'a str) -> Result<Command<'a>, ClientError> {
         let mut parts = s.trim().split_whitespace();
         match parts.next() {
             Some("GET") => {
@@ -55,97 +55,97 @@ mod tests {
 
     #[test]
     fn parse_get_success() {
-        let result = Command::from_str("GET key").unwrap();
+        let result = Command::parse("GET key").unwrap();
         assert_eq!(result, Command::Get("key"));
     }
 
     #[test]
     fn parse_get_no_key() {
-        let result = Command::from_str("GET");
+        let result = Command::parse("GET");
         assert_eq!(result, Err(ClientError::WrongNumberOfArguments));
     }
 
     #[test]
     fn parse_get_too_many_args() {
-        let result = Command::from_str("GET key value");
+        let result = Command::parse("GET key value");
         assert_eq!(result, Err(ClientError::WrongNumberOfArguments));
     }
 
     #[test]
     fn parse_set_success() {
-        let result = Command::from_str("SET key value").unwrap();
+        let result = Command::parse("SET key value").unwrap();
         assert_eq!(result, Command::Set("key", "value"));
     }
 
     #[test]
     fn parse_set_no_args() {
-        let result = Command::from_str("SET");
+        let result = Command::parse("SET");
         assert_eq!(result, Err(ClientError::WrongNumberOfArguments));
     }
 
     #[test]
     fn parse_set_one_arg() {
-        let result = Command::from_str("SET key");
+        let result = Command::parse("SET key");
         assert_eq!(result, Err(ClientError::WrongNumberOfArguments));
     }
 
     #[test]
     fn parse_set_too_many_args() {
-        let result = Command::from_str("SET key value extra");
+        let result = Command::parse("SET key value extra");
         assert_eq!(result, Err(ClientError::WrongNumberOfArguments));
     }
 
     #[test]
     fn parse_unknown_command() {
-        let result = Command::from_str("UNKNOWN");
+        let result = Command::parse("UNKNOWN");
         assert_eq!(result, Err(ClientError::UnknownCommand));
     }
 
     #[test]
     fn parse_empty_string() {
-        let result = Command::from_str("");
+        let result = Command::parse("");
         assert_eq!(result, Err(ClientError::UnknownCommand));
     }
 
     #[test]
     fn parse_set_with_multiple_spaces() {
-        let result = Command::from_str("SET   key   value").unwrap();
+        let result = Command::parse("SET   key   value").unwrap();
         assert_eq!(result, Command::Set("key", "value"));
     }
 
     #[test]
     fn parse_get_with_multiple_spaces() {
-        let result = Command::from_str("GET   key").unwrap();
+        let result = Command::parse("GET   key").unwrap();
         assert_eq!(result, Command::Get("key"));
     }
 
     #[test]
     fn case_sensitive_command() {
-        let result = Command::from_str("get key");
+        let result = Command::parse("get key");
         assert_eq!(result, Err(ClientError::UnknownCommand));
     }
 
     #[test]
     fn parse_delete_success() {
-        let result = Command::from_str("DELETE key").unwrap();
+        let result = Command::parse("DELETE key").unwrap();
         assert_eq!(result, Command::Delete("key"));
     }
 
     #[test]
     fn parse_delete_no_key() {
-        let result = Command::from_str("DELETE");
+        let result = Command::parse("DELETE");
         assert_eq!(result, Err(ClientError::WrongNumberOfArguments));
     }
 
     #[test]
     fn parse_delete_too_many_args() {
-        let result = Command::from_str("DELETE key value");
+        let result = Command::parse("DELETE key value");
         assert_eq!(result, Err(ClientError::WrongNumberOfArguments));
     }
 
     #[test]
     fn parse_delete_with_multiple_spaces() {
-        let result = Command::from_str("DELETE   key").unwrap();
+        let result = Command::parse("DELETE   key").unwrap();
         assert_eq!(result, Command::Delete("key"));
     }
 }

@@ -17,7 +17,7 @@ pub async fn process(mut socket: TcpStream, db: Db) -> Result<()> {
             break;
         }
 
-        match Command::from_str(&line) {
+        match Command::parse(&line) {
             Ok(Command::Get(key)) => {
                 let db = db.read().await;
                 if let Some(value) = db.get(key) {
