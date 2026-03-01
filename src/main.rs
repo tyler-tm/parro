@@ -2,11 +2,9 @@ use parro::error;
 use parro::server::Server;
 
 #[tokio::main]
-
 async fn main() -> error::Result<()> {
     let server = Server::new()
         .await
-        .map_err(|e| -> error::Error { format!("Error while starting server: {}", e).into() })?;
-
+        .map_err(|e| -> error::Error { format!("Error while starting server: {e}").into() })?;
     server.run().await
 }

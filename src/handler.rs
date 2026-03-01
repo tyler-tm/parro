@@ -4,6 +4,26 @@ use crate::storage::Db;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::net::TcpStream;
 
+async fn write_error(
+    writer: &mut (impl AsyncWriteExt + Unpin),
+    e: impl std::fmt::Display,
+) -> Result<()> {
+    let msg = format!("Error: {e}\n");
+    writer.write_all(msg.as_bytes()).await?;
+    Ok(())
+}
+
+async fn write_result(
+    writer: &mut (impl AsyncWriteExt + Unpin),
+    result: std::result::Result<(), impl std::fmt::Display>,
+) -> Result<()> {
+    match result {
+        Ok(()) => writer.write_all(b"OK\n").await?,
+        Err(e) => write_error(writer, e).await?,
+    }
+    Ok(())
+}
+
 pub async fn process(mut socket: TcpStream, db: Db) -> Result<()> {
     let (reader, writer) = socket.split();
     let mut reader = BufReader::new(reader);
@@ -20,41 +40,23 @@ pub async fn process(mut socket: TcpStream, db: Db) -> Result<()> {
         match Command::parse(&line) {
             Ok(Command::Get(key)) => {
                 let db = db.read().await;
-                if let Some(value) = db.get(key) {
-                    writer.write_all(value.as_bytes()).await?;
-                    writer.write_all(b"\n").await?;
-                } else {
-                    writer.write_all(b"NULL\n").await?;
+                match db.get(key) {
+                    Some(value) => {
+                        writer.write_all(value.as_bytes()).await?;
+                        writer.write_all(b"\n").await?;
+                    }
+                    None => writer.write_all(b"NULL\n").await?,
                 }
             }
             Ok(Command::Set(key, value)) => {
-                let mut db = db.write().await;
-                match db.set(key, value) {
-                    Ok(_) => {
-                        writer.write_all(b"OK\n").await?;
-                    }
-                    Err(e) => {
-                        let msg = format!("Error: {}\n", e);
-                        writer.write_all(msg.as_bytes()).await?;
-                    }
-                }
+                let result = db.write().await.set(key, value);
+                write_result(&mut writer, result).await?;
             }
             Ok(Command::Delete(key)) => {
-                let mut db = db.write().await;
-                match db.delete(key) {
-                    Ok(_) => {
-                        writer.write_all(b"OK\n").await?;
-                    }
-                    Err(e) => {
-                        let msg = format!("Error: {}\n", e);
-                        writer.write_all(msg.as_bytes()).await?;
-                    }
-                }
+                let result = db.write().await.delete(key);
+                write_result(&mut writer, result).await?;
             }
-            Err(e) => {
-                let msg = format!("Error: {}\n", e);
-                writer.write_all(msg.as_bytes()).await?;
-            }
+            Err(e) => write_error(&mut writer, e).await?,
         }
         writer.flush().await?;
     }

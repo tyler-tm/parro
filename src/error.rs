@@ -1,7 +1,7 @@
 use std::error;
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClientError {
     UnknownCommand,
     WrongNumberOfArguments,
