@@ -2,7 +2,6 @@ use crate::error::Result;
 use crate::handler;
 use crate::static_utils;
 use crate::storage;
-use colored::*;
 use tokio::net::TcpListener;
 
 // Server could likely be enumerated as TCP, gRPC, etc. in the future
@@ -14,10 +13,7 @@ impl Server {
     pub async fn new() -> Result<Self> {
         let addr = static_utils::default_addr();
         let listener = TcpListener::bind(&addr).await?;
-        println!(
-            "🦜 Parro open for business at {}",
-            addr.bright_green()
-        );
+        println!("🦜 Parro open for business at {addr}");
         Ok(Server { listener })
     }
 
