@@ -1,9 +1,9 @@
-const BYTES_MB_CONVERSION: usize = 1024 * 1024;
+pub const BYTES_MB_CONVERSION: u32 = 1024 * 1024;
 
-pub const fn mb_to_bytes(mb: usize) -> usize {
-    mb * BYTES_MB_CONVERSION
-}
+pub const DEFAULT_IP: &str = "127.0.0.1";
+pub const DEFAULT_PORT: &str = "14242";
 
-pub const fn bytes_to_mb(bytes: usize) -> usize {
-    bytes / BYTES_MB_CONVERSION
+pub fn default_addr() -> String {
+    let port = std::env::var("PARRO_PORT").unwrap_or_else(|_| DEFAULT_PORT.to_string());
+    format!("{DEFAULT_IP}:{port}")
 }

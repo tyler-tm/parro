@@ -1,64 +1,38 @@
-use crate::command::Command;
 use crate::error::Result;
+use crate::protocol::{self, Request, Response};
 use crate::storage::Db;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::net::TcpStream;
 
-async fn write_error(
-    writer: &mut (impl AsyncWriteExt + Unpin),
-    e: impl std::fmt::Display,
-) -> Result<()> {
-    let msg = format!("Error: {e}\n");
-    writer.write_all(msg.as_bytes()).await?;
-    Ok(())
-}
-
-async fn write_result(
-    writer: &mut (impl AsyncWriteExt + Unpin),
-    result: std::result::Result<(), impl std::fmt::Display>,
-) -> Result<()> {
-    match result {
-        Ok(()) => writer.write_all(b"OK\n").await?,
-        Err(e) => write_error(writer, e).await?,
-    }
-    Ok(())
-}
-
 pub async fn process(mut socket: TcpStream, db: Db) -> Result<()> {
-    let (reader, writer) = socket.split();
-    let mut reader = BufReader::new(reader);
-    let mut writer = BufWriter::new(writer);
-    let mut line = String::new();
+    let (mut reader, mut writer) = socket.split();
 
     loop {
-        line.clear();
-        let bytes_read = reader.read_line(&mut line).await?;
-        if bytes_read == 0 {
-            break;
-        }
+        let frame = protocol::read_frame(&mut reader).await?;
+        let Some(frame) = frame else { break };
 
-        match Command::parse(&line) {
-            Ok(Command::Get(key)) => {
+        let response = match bincode::deserialize::<Request>(&frame) {
+            Ok(Request::Get { key }) => {
                 let db = db.read().await;
-                match db.get(key) {
-                    Some(value) => {
-                        writer.write_all(value.as_bytes()).await?;
-                        writer.write_all(b"\n").await?;
-                    }
-                    None => writer.write_all(b"NULL\n").await?,
+                match db.get(&key) {
+                    Some(value) => Response::Value(value.to_vec()),
+                    None => Response::Null,
                 }
             }
-            Ok(Command::Set(key, value)) => {
-                let result = db.write().await.set(key, value);
-                write_result(&mut writer, result).await?;
+            Ok(Request::Set { key, value }) => {
+                match db.write().await.set(&key, value) {
+                    Ok(()) => Response::Ok,
+                    Err(e) => Response::Error(e.to_string()),
+                }
             }
-            Ok(Command::Delete(key)) => {
-                let result = db.write().await.delete(key);
-                write_result(&mut writer, result).await?;
+            Ok(Request::Delete { key }) => {
+                let _ = db.write().await.delete(&key);
+                Response::Ok
             }
-            Err(e) => write_error(&mut writer, e).await?,
-        }
-        writer.flush().await?;
+            Err(e) => Response::Error(format!("invalid request: {e}")),
+        };
+
+        let response_bytes = bincode::serialize(&response)?;
+        protocol::write_frame(&mut writer, &response_bytes).await?;
     }
     Ok(())
 }
@@ -67,10 +41,9 @@ pub async fn process(mut socket: TcpStream, db: Db) -> Result<()> {
 mod tests {
     use super::*;
     use crate::storage::new_db;
-    use tokio::io::AsyncBufReadExt;
     use tokio::net::TcpListener;
 
-    async fn setup_test() -> (TcpStream, Db, String) {
+    async fn setup_test() -> (TcpStream, Db) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let db = new_db();
@@ -82,61 +55,61 @@ mod tests {
         });
 
         let stream = TcpStream::connect(addr).await.unwrap();
-        (stream, db, addr.to_string())
+        (stream, db)
+    }
+
+    async fn send_request(stream: &mut TcpStream, request: &Request) -> Response {
+        let (mut reader, mut writer) = stream.split();
+        let request_bytes = bincode::serialize(request).unwrap();
+        protocol::write_frame(&mut writer, &request_bytes).await.unwrap();
+        let frame = protocol::read_frame(&mut reader).await.unwrap().unwrap();
+        bincode::deserialize(&frame).unwrap()
     }
 
     #[tokio::test]
     async fn process_get_found() {
-        let (mut stream, db, _) = setup_test().await;
-        db.write().await.set("key", "value").unwrap();
+        let (mut stream, db) = setup_test().await;
+        db.write().await.set("key", b"value".to_vec()).unwrap();
 
-        stream.write_all(b"GET key\n").await.unwrap();
-        stream.flush().await.unwrap();
-
-        let mut reader = BufReader::new(&mut stream);
-        let mut line = String::new();
-        reader.read_line(&mut line).await.unwrap();
-        assert_eq!(line, "value\n");
+        let response = send_request(&mut stream, &Request::Get { key: "key".into() }).await;
+        assert_eq!(response, Response::Value(b"value".to_vec()));
     }
 
     #[tokio::test]
     async fn process_get_not_found() {
-        let (mut stream, _, _) = setup_test().await;
+        let (mut stream, _db) = setup_test().await;
 
-        stream.write_all(b"GET key\n").await.unwrap();
-        stream.flush().await.unwrap();
-
-        let mut reader = BufReader::new(&mut stream);
-        let mut line = String::new();
-        reader.read_line(&mut line).await.unwrap();
-        assert_eq!(line, "NULL\n");
+        let response = send_request(&mut stream, &Request::Get { key: "key".into() }).await;
+        assert_eq!(response, Response::Null);
     }
 
     #[tokio::test]
     async fn process_set_success() {
-        let (mut stream, db, _) = setup_test().await;
+        let (mut stream, db) = setup_test().await;
 
-        stream.write_all(b"SET key value\n").await.unwrap();
-        stream.flush().await.unwrap();
-
-        let mut reader = BufReader::new(&mut stream);
-        let mut line = String::new();
-        reader.read_line(&mut line).await.unwrap();
-        assert_eq!(line, "OK\n");
-
-        assert_eq!(db.read().await.get("key"), Some("value"));
+        let response = send_request(
+            &mut stream,
+            &Request::Set { key: "key".into(), value: b"value".to_vec() },
+        ).await;
+        assert_eq!(response, Response::Ok);
+        assert_eq!(db.read().await.get("key"), Some(b"value".as_slice()));
     }
 
     #[tokio::test]
-    async fn process_invalid_command() {
-        let (mut stream, _, _) = setup_test().await;
+    async fn process_delete_success() {
+        let (mut stream, db) = setup_test().await;
+        db.write().await.set("key", b"value".to_vec()).unwrap();
 
-        stream.write_all(b"INVALID command\n").await.unwrap();
-        stream.flush().await.unwrap();
+        let response = send_request(&mut stream, &Request::Delete { key: "key".into() }).await;
+        assert_eq!(response, Response::Ok);
+        assert_eq!(db.read().await.get("key"), None);
+    }
 
-        let mut reader = BufReader::new(&mut stream);
-        let mut line = String::new();
-        reader.read_line(&mut line).await.unwrap();
-        assert_eq!(line, "Error: unknown command\n");
+    #[tokio::test]
+    async fn process_delete_idempotent() {
+        let (mut stream, _db) = setup_test().await;
+
+        let response = send_request(&mut stream, &Request::Delete { key: "key".into() }).await;
+        assert_eq!(response, Response::Ok);
     }
 }

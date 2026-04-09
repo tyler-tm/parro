@@ -1,12 +1,12 @@
 use crate::error::StorageError;
-use crate::static_utils::{bytes_to_mb, mb_to_bytes};
+use crate::static_utils::BYTES_MB_CONVERSION;
 use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 pub struct Store {
-    map: HashMap<String, String>,
+    map: HashMap<String, Vec<u8>>,
     current_size_bytes: usize,
     max_size_bytes: usize,
 }
@@ -20,11 +20,11 @@ impl Store {
         }
     }
 
-    pub fn get(&self, key: &str) -> Option<&str> {
-        self.map.get(key).map(|s| s.as_str())
+    pub fn get(&self, key: &str) -> Option<&[u8]> {
+        self.map.get(key).map(|v| v.as_slice())
     }
 
-    pub fn set(&mut self, key: &str, value: &str) -> Result<(), StorageError> {
+    pub fn set(&mut self, key: &str, value: Vec<u8>) -> Result<(), StorageError> {
         use std::collections::hash_map::Entry;
 
         let new_value_size = value.len();
@@ -43,20 +43,20 @@ impl Store {
                     return Err(StorageError::LimitExceeded);
                 }
                 self.current_size_bytes = new_size_bytes;
-                entry.insert(value.to_string());
+                entry.insert(value);
             }
             Entry::Vacant(entry) => {
                 let new_key_value_size = entry.key().len() + new_value_size;
                 if self.current_size_bytes + new_key_value_size > self.max_size_bytes {
                     println!(
                         "Storage limit exceeded. Max size: {} MB, attempted to add new size of {} bytes",
-                        bytes_to_mb(self.max_size_bytes),
+                        self.max_size_bytes / BYTES_MB_CONVERSION as usize,
                         new_key_value_size
                     );
                     return Err(StorageError::LimitExceeded);
                 }
                 self.current_size_bytes += new_key_value_size;
-                entry.insert(value.to_string());
+                entry.insert(value);
             }
         }
         Ok(())
@@ -82,7 +82,7 @@ pub fn new_db() -> Db {
         .unwrap_or(DEFAULT_MAX_SIZE_MB);
     println!("Max size: {} MB", max_size_mb);
 
-    let max_size_bytes = mb_to_bytes(max_size_mb);
+    let max_size_bytes = max_size_mb * BYTES_MB_CONVERSION as usize;
     Arc::new(RwLock::new(Store::new(max_size_bytes)))
 }
 
@@ -98,70 +98,55 @@ mod tests {
 
     #[test]
     fn store_set_and_get() {
-        let mut store = Store::new(16);
-        let key = "new_key";
-        let value = "new_value";
-        store.set(key, value).unwrap();
-        assert_eq!(store.get(key), Some(value));
+        let mut store = Store::new(32);
+        store.set("new_key", b"new_value".to_vec()).unwrap();
+        assert_eq!(store.get("new_key"), Some(b"new_value".as_slice()));
     }
 
     #[test]
     fn store_update_value() {
-        let mut store = Store::new(16);
-        let key = "to_update";
-        store.set(key, "old").unwrap();
-        let new_value = "updated";
-        store.set(key, new_value).unwrap();
-        assert_eq!(store.get(key), Some(new_value));
+        let mut store = Store::new(32);
+        store.set("to_update", b"old".to_vec()).unwrap();
+        store.set("to_update", b"updated".to_vec()).unwrap();
+        assert_eq!(store.get("to_update"), Some(b"updated".as_slice()));
     }
 
     #[test]
     fn store_set_exceed_limit_new_key() {
         let mut store = Store::new(16);
-        let key = "new_key";
-        let value = "this_is_a_long_value";
-        let result = store.set(key, value);
+        let result = store.set("new_key", b"this_is_a_long_value".to_vec());
         assert_eq!(result, Err(StorageError::LimitExceeded));
     }
 
     #[test]
     fn store_set_exceed_limit_existing_key() {
         let mut store = Store::new(16);
-        let key = "to_update";
-        let value = "short";
-        store.set(key, value).unwrap();
-        let new_value = "this_is_a_very_long_new_value";
-        let result = store.set(key, new_value);
+        store.set("to_update", b"short".to_vec()).unwrap();
+        let result = store.set("to_update", b"this_is_a_very_long_new_value".to_vec());
         assert_eq!(result, Err(StorageError::LimitExceeded));
     }
 
     #[test]
     fn store_set_empty_value() {
         let mut store = Store::new(8);
-        let key = "new_key";
-        let value = "";
-        store.set(key, value).unwrap();
-        assert_eq!(store.get(key), Some(""));
+        store.set("new_key", vec![]).unwrap();
+        assert_eq!(store.get("new_key"), Some(b"".as_slice()));
     }
 
     #[test]
     fn store_set_empty_key() {
         let mut store = Store::new(8);
-        let key = "";
-        let value = "keyless";
-        store.set(key, value).unwrap();
-        assert_eq!(store.get(key), Some(value));
+        store.set("", b"keyless".to_vec()).unwrap();
+        assert_eq!(store.get(""), Some(b"keyless".as_slice()));
     }
 
     #[test]
     fn store_delete() {
         let mut store = Store::new(32);
-        let key = "to_delete";
-        let value = "some_value";
-        store.set(key, value).unwrap();
-        assert_eq!(store.get(key), Some(value));
-        store.delete(key).unwrap();
-        assert_eq!(store.get(key), None);
+        store.set("to_delete", b"some_value".to_vec()).unwrap();
+        assert_eq!(store.get("to_delete"), Some(b"some_value".as_slice()));
+        store.delete("to_delete").unwrap();
+        assert_eq!(store.get("to_delete"), None);
     }
 
     #[test]
