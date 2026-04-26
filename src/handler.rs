@@ -18,17 +18,15 @@ pub async fn process(mut socket: TcpStream, db: Db) -> Result<()> {
                     None => Response::Null,
                 }
             }
-            Ok(Request::Set { key, value }) => {
-                match db.write().await.set(&key, value) {
-                    Ok(()) => Response::Ok,
-                    Err(e) => Response::Error(e.to_string()),
-                }
-            }
+            Ok(Request::Set { key, value }) => match db.write().await.set(&key, value) {
+                Ok(()) => Response::Ok,
+                Err(e) => Response::Error(e.to_string()),
+            },
             Ok(Request::Delete { key }) => {
                 let _ = db.write().await.delete(&key);
                 Response::Ok
             }
-            Err(e) => Response::Error(format!("invalid request: {e}")),
+            Err(e) => Response::Error(format!("Invalid request: {e}")),
         };
 
         let response_bytes = bincode::serialize(&response)?;
@@ -61,7 +59,9 @@ mod tests {
     async fn send_request(stream: &mut TcpStream, request: &Request) -> Response {
         let (mut reader, mut writer) = stream.split();
         let request_bytes = bincode::serialize(request).unwrap();
-        protocol::write_frame(&mut writer, &request_bytes).await.unwrap();
+        protocol::write_frame(&mut writer, &request_bytes)
+            .await
+            .unwrap();
         let frame = protocol::read_frame(&mut reader).await.unwrap().unwrap();
         bincode::deserialize(&frame).unwrap()
     }
@@ -89,8 +89,12 @@ mod tests {
 
         let response = send_request(
             &mut stream,
-            &Request::Set { key: "key".into(), value: b"value".to_vec() },
-        ).await;
+            &Request::Set {
+                key: "key".into(),
+                value: b"value".to_vec(),
+            },
+        )
+        .await;
         assert_eq!(response, Response::Ok);
         assert_eq!(db.read().await.get("key"), Some(b"value".as_slice()));
     }

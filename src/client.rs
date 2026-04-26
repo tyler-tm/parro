@@ -15,10 +15,6 @@ impl Client {
         Ok(Client { stream })
     }
 
-    pub async fn connect_default() -> Result<Self> {
-        Self::connect(&static_utils::default_addr()).await
-    }
-
     pub async fn get<T: DeserializeOwned>(&mut self, key: &str) -> Result<Option<T>> {
         let response = self
             .send(Request::Get {
@@ -197,7 +193,6 @@ mod tests {
             })
             .await
             .unwrap();
-
         assert_eq!(
             value,
             User {
@@ -206,9 +201,8 @@ mod tests {
             }
         );
 
-        // Verify it was stored
-        let cached: Option<User> = client.get("user:2").await.unwrap();
-        assert_eq!(cached, Some(value));
+        let saved: Option<User> = client.get("user:2").await.unwrap();
+        assert_eq!(saved, Some(value));
     }
 
     #[tokio::test]

@@ -35,12 +35,10 @@ impl Store {
                 let new_size_bytes = self.current_size_bytes - old_value_size + new_value_size;
 
                 if new_size_bytes > self.max_size_bytes {
-                    println!(
-                        "Storage limit exceeded. Max size: {} bytes, attempted to increase existing entry size by {} bytes",
+                    return Err(limit_exceeded(
                         self.max_size_bytes,
-                        new_value_size - old_value_size
-                    );
-                    return Err(StorageError::LimitExceeded);
+                        new_value_size - old_value_size,
+                    ));
                 }
                 self.current_size_bytes = new_size_bytes;
                 entry.insert(value);
@@ -48,12 +46,7 @@ impl Store {
             Entry::Vacant(entry) => {
                 let new_key_value_size = entry.key().len() + new_value_size;
                 if self.current_size_bytes + new_key_value_size > self.max_size_bytes {
-                    println!(
-                        "Storage limit exceeded. Max size: {} MB, attempted to add new size of {} bytes",
-                        self.max_size_bytes / BYTES_MB_CONVERSION as usize,
-                        new_key_value_size
-                    );
-                    return Err(StorageError::LimitExceeded);
+                    return Err(limit_exceeded(self.max_size_bytes, new_key_value_size));
                 }
                 self.current_size_bytes += new_key_value_size;
                 entry.insert(value);
@@ -70,6 +63,14 @@ impl Store {
             Err(StorageError::NotFound)
         }
     }
+}
+
+fn limit_exceeded(max_size_bytes: usize, attempted_bytes: usize) -> StorageError {
+    println!(
+        "Storage limit exceeded. Max storage size: {} bytes, attempted to add {} bytes.",
+        max_size_bytes, attempted_bytes
+    );
+    StorageError::LimitExceeded
 }
 
 pub type Db = Arc<RwLock<Store>>;
