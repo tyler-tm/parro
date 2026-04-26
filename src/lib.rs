@@ -13,5 +13,7 @@ pub mod server;
 mod static_utils;
 #[cfg(feature = "server")]
 mod storage;
+#[cfg(all(test, feature = "server"))]
+mod test_support;
 
 pub use serde::{Deserialize, Serialize};

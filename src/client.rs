@@ -97,10 +97,8 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::handler;
-    use crate::storage::new_db;
+    use crate::test_support;
     use serde::{Deserialize, Serialize};
-    use tokio::net::TcpListener;
     use tokio::sync::watch;
 
     #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -110,23 +108,7 @@ mod tests {
     }
 
     async fn setup_server() -> (String, watch::Sender<bool>) {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap().to_string();
-        let db = new_db(1024);
-        let (shutdown_tx, _) = watch::channel(false);
-        let shutdown_tx_inner = shutdown_tx.clone();
-
-        tokio::spawn(async move {
-            loop {
-                let (socket, _) = listener.accept().await.unwrap();
-                let db = db.clone();
-                let shutdown_rx = shutdown_tx_inner.subscribe();
-                tokio::spawn(async move {
-                    handler::process(socket, db, shutdown_rx).await.unwrap();
-                });
-            }
-        });
-
+        let (addr, _db, shutdown_tx) = test_support::start_server(1024).await;
         (addr, shutdown_tx)
     }
 

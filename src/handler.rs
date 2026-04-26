@@ -50,21 +50,10 @@ pub async fn process(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::new_db;
-    use tokio::net::TcpListener;
+    use crate::test_support;
 
     async fn setup_test() -> (TcpStream, Db, watch::Sender<bool>) {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let db = new_db(1024);
-        let (shutdown_tx, shutdown_rx) = watch::channel(false);
-
-        let db_clone = db.clone();
-        tokio::spawn(async move {
-            let (socket, _) = listener.accept().await.unwrap();
-            process(socket, db_clone, shutdown_rx).await.unwrap();
-        });
-
+        let (addr, db, shutdown_tx) = test_support::start_server(1024).await;
         let stream = TcpStream::connect(addr).await.unwrap();
         (stream, db, shutdown_tx)
     }
