@@ -1,6 +1,5 @@
 use crate::error::Result;
 use crate::protocol::{self, Request, Response};
-use crate::static_utils;
 use serde::{Serialize, de::DeserializeOwned};
 use std::future::Future;
 use tokio::net::TcpStream;

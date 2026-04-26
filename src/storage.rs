@@ -66,7 +66,7 @@ impl Store {
 }
 
 fn limit_exceeded(max_size_bytes: usize, attempted_bytes: usize) -> StorageError {
-    println!(
+    eprintln!(
         "Storage limit exceeded. Max storage size: {} bytes, attempted to add {} bytes.",
         max_size_bytes, attempted_bytes
     );
@@ -83,7 +83,7 @@ pub fn new_db() -> Db {
         .unwrap_or(DEFAULT_MAX_SIZE_MB);
     println!("Max size: {} MB", max_size_mb);
 
-    let max_size_bytes = max_size_mb * BYTES_MB_CONVERSION as usize;
+    let max_size_bytes = max_size_mb * BYTES_MB_CONVERSION;
     Arc::new(RwLock::new(Store::new(max_size_bytes)))
 }
 

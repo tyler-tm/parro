@@ -18,7 +18,7 @@ pub enum Response {
     Error(String),
 }
 
-const MAX_FRAME_SIZE: u32 = 64 * BYTES_MB_CONVERSION;
+const MAX_FRAME_SIZE: u32 = (64 * BYTES_MB_CONVERSION) as u32;
 
 pub async fn write_frame(
     writer: &mut (impl AsyncWriteExt + Unpin),

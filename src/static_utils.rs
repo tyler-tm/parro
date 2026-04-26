@@ -1,4 +1,4 @@
-pub const BYTES_MB_CONVERSION: u32 = 1024 * 1024;
+pub const BYTES_MB_CONVERSION: usize = 1024 * 1024;
 
 pub const DEFAULT_IP: &str = "127.0.0.1";
 pub const DEFAULT_PORT: &str = "14242";

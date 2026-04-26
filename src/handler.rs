@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::error::{Result, StorageError};
 use crate::protocol::{self, Request, Response};
 use crate::storage::Db;
 use tokio::net::TcpStream;
@@ -22,10 +22,10 @@ pub async fn process(mut socket: TcpStream, db: Db) -> Result<()> {
                 Ok(()) => Response::Ok,
                 Err(e) => Response::Error(e.to_string()),
             },
-            Ok(Request::Delete { key }) => {
-                let _ = db.write().await.delete(&key);
-                Response::Ok
-            }
+            Ok(Request::Delete { key }) => match db.write().await.delete(&key) {
+                Ok(()) | Err(StorageError::NotFound) => Response::Ok,
+                Err(e) => Response::Error(e.to_string()),
+            },
             Err(e) => Response::Error(format!("Invalid request: {e}")),
         };
 
