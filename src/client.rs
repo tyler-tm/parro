@@ -2,16 +2,23 @@ use crate::error::Result;
 use crate::protocol::{self, Request, Response};
 use serde::{Serialize, de::DeserializeOwned};
 use std::future::Future;
+use tokio::io::{BufReader, BufWriter};
 use tokio::net::TcpStream;
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 
 pub struct Client {
-    stream: TcpStream,
+    reader: BufReader<OwnedReadHalf>,
+    writer: BufWriter<OwnedWriteHalf>,
 }
 
 impl Client {
     pub async fn connect(addr: &str) -> Result<Self> {
         let stream = TcpStream::connect(addr).await?;
-        Ok(Client { stream })
+        let (reader, writer) = stream.into_split();
+        Ok(Client {
+            reader: BufReader::new(reader),
+            writer: BufWriter::new(writer),
+        })
     }
 
     pub async fn get<T: DeserializeOwned>(&mut self, key: &str) -> Result<Option<T>> {
@@ -78,9 +85,8 @@ impl Client {
 
     async fn send(&mut self, request: Request) -> Result<Response> {
         let request_bytes = bincode::serialize(&request)?;
-        let (mut reader, mut writer) = self.stream.split();
-        protocol::write_frame(&mut writer, &request_bytes).await?;
-        let frame = protocol::read_frame(&mut reader)
+        protocol::write_frame(&mut self.writer, &request_bytes).await?;
+        let frame = protocol::read_frame(&mut self.reader)
             .await?
             .ok_or("connection closed")?;
         let response: Response = bincode::deserialize(&frame)?;

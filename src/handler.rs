@@ -1,10 +1,13 @@
 use crate::error::{Result, StorageError};
 use crate::protocol::{self, Request, Response};
 use crate::storage::Db;
+use tokio::io::{BufReader, BufWriter};
 use tokio::net::TcpStream;
 
 pub async fn process(mut socket: TcpStream, db: Db) -> Result<()> {
-    let (mut reader, mut writer) = socket.split();
+    let (reader, writer) = socket.split();
+    let mut reader = BufReader::new(reader);
+    let mut writer = BufWriter::new(writer);
 
     loop {
         let frame = protocol::read_frame(&mut reader).await?;

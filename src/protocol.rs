@@ -25,7 +25,7 @@ pub async fn write_frame(
     data: &[u8],
 ) -> std::io::Result<()> {
     let len = data.len() as u32;
-    writer.write_all(&len.to_be_bytes()).await?;
+    writer.write_u32(len).await?;
     writer.write_all(data).await?;
     writer.flush().await?;
     Ok(())
@@ -34,14 +34,12 @@ pub async fn write_frame(
 pub async fn read_frame(
     reader: &mut (impl AsyncReadExt + Unpin),
 ) -> std::io::Result<Option<Vec<u8>>> {
-    let mut len_buf = [0u8; 4];
-    match reader.read_exact(&mut len_buf).await {
-        Ok(_) => {}
+    let len = match reader.read_u32().await {
+        Ok(len) => len,
         Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(None),
         Err(e) => return Err(e),
-    }
+    };
 
-    let len = u32::from_be_bytes(len_buf);
     if len > MAX_FRAME_SIZE {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
