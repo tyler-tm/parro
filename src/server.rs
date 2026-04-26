@@ -4,6 +4,8 @@ use crate::handler;
 use crate::static_utils::BYTES_MB_CONVERSION;
 use crate::storage::{self, Db};
 use tokio::net::TcpListener;
+use tokio::sync::watch;
+use tokio::task::JoinSet;
 
 pub struct Server {
     listener: TcpListener,
@@ -23,15 +25,32 @@ impl Server {
     }
 
     pub async fn run(self) -> Result<()> {
-        loop {
-            let (socket, _) = self.listener.accept().await?;
-            let db = self.db.clone();
+        let (shutdown_tx, _) = watch::channel(false);
+        let mut tasks = JoinSet::new();
 
-            tokio::spawn(async move {
-                if let Err(e) = handler::process(socket, db).await {
-                    eprintln!("Error processing connection: {}", e);
+        loop {
+            tokio::select! {
+                biased;
+                _ = tokio::signal::ctrl_c() => {
+                    println!("Received shutdown signal; emptying connections...");
+                    let _ = shutdown_tx.send(true);
+                    break;
                 }
-            });
+                accept = self.listener.accept() => {
+                    let (socket, _) = accept?;
+                    let db = self.db.clone();
+                    let shutdown_rx = shutdown_tx.subscribe();
+                    tasks.spawn(async move {
+                        if let Err(e) = handler::process(socket, db, shutdown_rx).await {
+                            eprintln!("Error processing connection: {}", e);
+                        }
+                    });
+                }
+            }
         }
+
+        while tasks.join_next().await.is_some() {}
+        println!("Shutdown complete, cya.");
+        Ok(())
     }
 }

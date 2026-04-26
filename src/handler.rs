@@ -3,14 +3,23 @@ use crate::protocol::{self, Request, Response};
 use crate::storage::Db;
 use tokio::io::{BufReader, BufWriter};
 use tokio::net::TcpStream;
+use tokio::sync::watch;
 
-pub async fn process(mut socket: TcpStream, db: Db) -> Result<()> {
+pub async fn process(
+    mut socket: TcpStream,
+    db: Db,
+    mut shutdown: watch::Receiver<bool>,
+) -> Result<()> {
     let (reader, writer) = socket.split();
     let mut reader = BufReader::new(reader);
     let mut writer = BufWriter::new(writer);
 
     loop {
-        let frame = protocol::read_frame(&mut reader).await?;
+        let frame = tokio::select! {
+            biased;
+            _ = shutdown.changed() => break,
+            frame = protocol::read_frame(&mut reader) => frame?,
+        };
         let Some(frame) = frame else { break };
 
         let response = match bincode::deserialize::<Request>(&frame) {
@@ -44,19 +53,20 @@ mod tests {
     use crate::storage::new_db;
     use tokio::net::TcpListener;
 
-    async fn setup_test() -> (TcpStream, Db) {
+    async fn setup_test() -> (TcpStream, Db, watch::Sender<bool>) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let db = new_db(1024);
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
 
         let db_clone = db.clone();
         tokio::spawn(async move {
             let (socket, _) = listener.accept().await.unwrap();
-            process(socket, db_clone).await.unwrap();
+            process(socket, db_clone, shutdown_rx).await.unwrap();
         });
 
         let stream = TcpStream::connect(addr).await.unwrap();
-        (stream, db)
+        (stream, db, shutdown_tx)
     }
 
     async fn send_request(stream: &mut TcpStream, request: &Request) -> Response {
@@ -71,7 +81,7 @@ mod tests {
 
     #[tokio::test]
     async fn process_get_found() {
-        let (mut stream, db) = setup_test().await;
+        let (mut stream, db, _shutdown) = setup_test().await;
         db.write().await.set("key", b"value".to_vec()).unwrap();
 
         let response = send_request(&mut stream, &Request::Get { key: "key".into() }).await;
@@ -80,7 +90,7 @@ mod tests {
 
     #[tokio::test]
     async fn process_get_not_found() {
-        let (mut stream, _db) = setup_test().await;
+        let (mut stream, _db, _shutdown) = setup_test().await;
 
         let response = send_request(&mut stream, &Request::Get { key: "key".into() }).await;
         assert_eq!(response, Response::Null);
@@ -88,7 +98,7 @@ mod tests {
 
     #[tokio::test]
     async fn process_set_success() {
-        let (mut stream, db) = setup_test().await;
+        let (mut stream, db, _shutdown) = setup_test().await;
 
         let response = send_request(
             &mut stream,
@@ -104,7 +114,7 @@ mod tests {
 
     #[tokio::test]
     async fn process_delete_success() {
-        let (mut stream, db) = setup_test().await;
+        let (mut stream, db, _shutdown) = setup_test().await;
         db.write().await.set("key", b"value".to_vec()).unwrap();
 
         let response = send_request(&mut stream, &Request::Delete { key: "key".into() }).await;
@@ -114,7 +124,7 @@ mod tests {
 
     #[tokio::test]
     async fn process_delete_idempotent() {
-        let (mut stream, _db) = setup_test().await;
+        let (mut stream, _db, _shutdown) = setup_test().await;
 
         let response = send_request(&mut stream, &Request::Delete { key: "key".into() }).await;
         assert_eq!(response, Response::Ok);

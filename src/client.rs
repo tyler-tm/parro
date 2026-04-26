@@ -101,6 +101,7 @@ mod tests {
     use crate::storage::new_db;
     use serde::{Deserialize, Serialize};
     use tokio::net::TcpListener;
+    use tokio::sync::watch;
 
     #[derive(Debug, PartialEq, Serialize, Deserialize)]
     struct User {
@@ -108,27 +109,30 @@ mod tests {
         age: u32,
     }
 
-    async fn setup_server() -> String {
+    async fn setup_server() -> (String, watch::Sender<bool>) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap().to_string();
         let db = new_db(1024);
+        let (shutdown_tx, _) = watch::channel(false);
+        let shutdown_tx_inner = shutdown_tx.clone();
 
         tokio::spawn(async move {
             loop {
                 let (socket, _) = listener.accept().await.unwrap();
                 let db = db.clone();
+                let shutdown_rx = shutdown_tx_inner.subscribe();
                 tokio::spawn(async move {
-                    handler::process(socket, db).await.unwrap();
+                    handler::process(socket, db, shutdown_rx).await.unwrap();
                 });
             }
         });
 
-        addr
+        (addr, shutdown_tx)
     }
 
     #[tokio::test]
     async fn client_set_and_get_struct() {
-        let addr = setup_server().await;
+        let (addr, _shutdown) = setup_server().await;
         let mut client = Client::connect(&addr).await.unwrap();
 
         let user = User {
@@ -143,7 +147,7 @@ mod tests {
 
     #[tokio::test]
     async fn client_get_missing_key() {
-        let addr = setup_server().await;
+        let (addr, _shutdown) = setup_server().await;
         let mut client = Client::connect(&addr).await.unwrap();
 
         let result: Option<String> = client.get("nonexistent").await.unwrap();
@@ -152,7 +156,7 @@ mod tests {
 
     #[tokio::test]
     async fn client_set_and_delete() {
-        let addr = setup_server().await;
+        let (addr, _shutdown) = setup_server().await;
         let mut client = Client::connect(&addr).await.unwrap();
 
         client.set("key", &42u64).await.unwrap();
@@ -164,7 +168,7 @@ mod tests {
 
     #[tokio::test]
     async fn client_delete_missing_key() {
-        let addr = setup_server().await;
+        let (addr, _shutdown) = setup_server().await;
         let mut client = Client::connect(&addr).await.unwrap();
 
         client.delete("nonexistent").await.unwrap();
@@ -172,7 +176,7 @@ mod tests {
 
     #[tokio::test]
     async fn client_set_and_get_string() {
-        let addr = setup_server().await;
+        let (addr, _shutdown) = setup_server().await;
         let mut client = Client::connect(&addr).await.unwrap();
 
         client
@@ -186,7 +190,7 @@ mod tests {
 
     #[tokio::test]
     async fn client_get_or_set_miss() {
-        let addr = setup_server().await;
+        let (addr, _shutdown) = setup_server().await;
         let mut client = Client::connect(&addr).await.unwrap();
 
         let value: User = client
@@ -212,7 +216,7 @@ mod tests {
 
     #[tokio::test]
     async fn client_get_or_set_hit() {
-        let addr = setup_server().await;
+        let (addr, _shutdown) = setup_server().await;
         let mut client = Client::connect(&addr).await.unwrap();
 
         let user = User {
