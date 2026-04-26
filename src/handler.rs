@@ -44,7 +44,7 @@ mod tests {
     async fn setup_test() -> (TcpStream, Db) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let db = new_db();
+        let db = new_db(1024);
 
         let db_clone = db.clone();
         tokio::spawn(async move {

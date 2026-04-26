@@ -1,7 +1,5 @@
 use crate::error::StorageError;
-use crate::static_utils::BYTES_MB_CONVERSION;
 use std::collections::HashMap;
-use std::env;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -75,15 +73,7 @@ fn limit_exceeded(max_size_bytes: usize, attempted_bytes: usize) -> StorageError
 
 pub type Db = Arc<RwLock<Store>>;
 
-pub fn new_db() -> Db {
-    const DEFAULT_MAX_SIZE_MB: usize = 2048;
-    let max_size_mb: usize = env::var("PARRO_MAX_SIZE_MB")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(DEFAULT_MAX_SIZE_MB);
-    println!("Max size: {} MB", max_size_mb);
-
-    let max_size_bytes = max_size_mb * BYTES_MB_CONVERSION;
+pub fn new_db(max_size_bytes: usize) -> Db {
     Arc::new(RwLock::new(Store::new(max_size_bytes)))
 }
 
